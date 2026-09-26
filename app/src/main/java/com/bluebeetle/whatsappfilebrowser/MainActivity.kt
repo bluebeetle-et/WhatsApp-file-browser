@@ -90,8 +90,8 @@ fun BrowserApp() {
         Text("asimFiles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionButton("WhatsApp", Section.WHATSAPP, section, Modifier.weight(1f)) { section = it }
             SectionButton("Downloads", Section.DOWNLOADS, section, Modifier.weight(1f)) { section = it }
+            SectionButton("WhatsApp", Section.WHATSAPP, section, Modifier.weight(1f)) { section = it }
             SectionButton("Others", Section.OTHERS, section, Modifier.weight(1f)) { section = it }
         }
         Spacer(Modifier.height(10.dp))
