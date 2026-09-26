@@ -22,11 +22,38 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Prepare release signing
+        if: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/asimfiles-release.jks"
+
+      - name: Build signed release APK
+        if: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/asimfiles-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:assembleRelease
+
       - name: Build debug APK
+        if: ${{ github.event_name == 'pull_request' || secrets.ANDROID_KEYSTORE_BASE64 == '' }}
         run: gradle :app:assembleDebug
-      - name: Upload APK
+
+      - name: Upload signed release APK
+        if: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: whatsapp-file-browser-debug
+          name: asimFiles-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload debug APK
+        if: ${{ github.event_name == 'pull_request' || secrets.ANDROID_KEYSTORE_BASE64 == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: asimFiles-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
