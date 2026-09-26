@@ -186,13 +186,29 @@ fun openFile(context: android.content.Context, item: MediaItem) {
 fun shareFile(context: android.content.Context, item: MediaItem) {
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = item.mime; putExtra(Intent.EXTRA_STREAM, item.uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "Share file"))
 }
-fun saveToDownloads(context: android.content.Context, item: MediaItem): Boolean = try {
+fun saveToDownloads(context: android.content.Context, item: MediaItem): Boolean {
     if (item.uri.authority == MediaStore.AUTHORITY) return true
-    val values = ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, item.name); put(MediaStore.Downloads.MIME_TYPE, item.mime); put(MediaStore.Downloads.IS_PENDING, 1) }
-    val target = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return false
-    context.contentResolver.openInputStream(item.uri).use { input -> context.contentResolver.openOutputStream(target).use { output -> if (input != null && output != null) input.copyTo(output) } }
-    values.clear(); values.put(MediaStore.Downloads.IS_PENDING, 0); context.contentResolver.update(target, values, null, null); true
-} catch (_: Exception) { false }
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, item.name)
+            put(MediaStore.Downloads.MIME_TYPE, item.mime)
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val target = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: return false
+        context.contentResolver.openInputStream(item.uri).use { input ->
+            context.contentResolver.openOutputStream(target).use { output ->
+                if (input != null && output != null) input.copyTo(output)
+            }
+        }
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        context.contentResolver.update(target, values, null, null)
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
 
 fun expectedWhatsAppMediaUri(): Uri = DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Android/media/com.whatsapp/WhatsApp/Media")
 fun isUsefulFile(name: String): Boolean {
