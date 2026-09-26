@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
 fun BrowserApp() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("storage", Activity.MODE_PRIVATE) }
+    var downloadsUri by remember { mutableStateOf(prefs.getString("downloads_root", null)?.let(Uri::parse)) }
     var whatsappUri by remember { mutableStateOf(prefs.getString("root", null)?.let(Uri::parse)) }
     var otherUri by remember { mutableStateOf(prefs.getString("other_root", null)?.let(Uri::parse)) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -58,13 +59,21 @@ fun BrowserApp() {
         Thread {
             val found = when (section) {
                 Section.WHATSAPP -> whatsappUri?.let { scanFolder(context, it) } ?: emptyList()
-                Section.DOWNLOADS -> scanDownloads(context)
+                Section.DOWNLOADS -> downloadsUri?.let { scanFolder(context, it) } ?: emptyList()
                 Section.OTHERS -> otherUri?.let { scanFolder(context, it) } ?: emptyList()
             }
             (context as Activity).runOnUiThread { items = found; loading = false }
         }.start()
     }
 
+    val downloadsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            persistTree(context, uri)
+            prefs.edit().putString("downloads_root", uri.toString()).apply()
+            downloadsUri = uri
+            section = Section.DOWNLOADS
+        }
+    }
     val whatsappPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             persistTree(context, uri)
@@ -82,7 +91,7 @@ fun BrowserApp() {
         }
     }
 
-    LaunchedEffect(section, whatsappUri, otherUri) { refresh() }
+    LaunchedEffect(section, downloadsUri, whatsappUri, otherUri) { refresh() }
 
     val visible = items.filter { it.name.contains(query, true) }.sortedByDescending { it.added }
 
@@ -96,6 +105,10 @@ fun BrowserApp() {
         }
         Spacer(Modifier.height(10.dp))
         when {
+            section == Section.DOWNLOADS && downloadsUri == null ->
+                Button({ downloadsPicker.launch(expectedDownloadsUri()) }, Modifier.fillMaxWidth()) { Text("Allow Downloads Access") }
+            section == Section.DOWNLOADS ->
+                TextButton({ downloadsPicker.launch(downloadsUri) }) { Text("Change Downloads folder") }
             section == Section.WHATSAPP && whatsappUri == null ->
                 Button({ whatsappPicker.launch(expectedWhatsAppMediaUri()) }, Modifier.fillMaxWidth()) { Text("Allow WhatsApp Media Access") }
             section == Section.OTHERS && otherUri == null ->
@@ -210,6 +223,7 @@ fun saveToDownloads(context: android.content.Context, item: MediaItem): Boolean 
     }
 }
 
+fun expectedDownloadsUri(): Uri = DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download")
 fun expectedWhatsAppMediaUri(): Uri = DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Android/media/com.whatsapp/WhatsApp/Media")
 fun isUsefulFile(name: String): Boolean {
     val n = name.lowercase()
