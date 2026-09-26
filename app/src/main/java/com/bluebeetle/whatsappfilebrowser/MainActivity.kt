@@ -33,7 +33,7 @@ import java.text.DateFormat
 import java.util.Date
 
 data class MediaItem(val uri: Uri, val name: String, val mime: String, val size: Long, val added: Long)
-enum class Section { WHATSAPP, DOWNLOADS, OTHERS }
+enum class Section { DOWNLOADS, WHATSAPP, OTHERS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
