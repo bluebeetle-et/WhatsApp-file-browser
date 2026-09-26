@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -80,9 +81,9 @@ fun BrowserApp() {
             Spacer(Modifier.height(12.dp))
             Text("Choose your WhatsApp Media folder once. The app will remember it.")
             Spacer(Modifier.height(24.dp))
-            Button(onClick = { picker.launch(null) }, modifier = Modifier.fillMaxWidth().height(60.dp)) { Text("Choose WhatsApp Folder") }
+            Button(onClick = { picker.launch(expectedWhatsAppMediaUri()) }, modifier = Modifier.fillMaxWidth().height(60.dp)) { Text("Allow WhatsApp Media Access") }
             Spacer(Modifier.height(12.dp))
-            Text("Usually: Android / media / com.whatsapp / WhatsApp / Media", style = MaterialTheme.typography.bodySmall)
+            Text("We’ll open the standard WhatsApp location when Android allows it. Confirm the Media folder once.", style = MaterialTheme.typography.bodySmall)
         }
         return
     }
@@ -96,7 +97,7 @@ fun BrowserApp() {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("WhatsApp Files", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextButton(onClick = { picker.launch(rootUri) }) { Text("Change folder") }
+            TextButton(onClick = { picker.launch(rootUri ?: expectedWhatsAppMediaUri()) }) { Text("Change folder") }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,8 +153,11 @@ fun scanFolder(context: android.content.Context, rootUri: Uri): List<MediaItem> 
         dir.listFiles().forEach { f ->
             if (f.isDirectory) walk(f)
             else {
-                val mime = f.type ?: context.contentResolver.getType(f.uri) ?: "application/octet-stream"
-                result += MediaItem(f.uri, f.name ?: "Unnamed file", mime, f.length(), f.lastModified())
+                val name = f.name ?: "Unnamed file"
+                if (isUsefulWhatsAppFile(name)) {
+                    val mime = f.type ?: context.contentResolver.getType(f.uri) ?: mimeFromName(name)
+                    result += MediaItem(f.uri, name, mime, f.length(), f.lastModified())
+                }
             }
         }
     }
@@ -189,3 +193,41 @@ fun saveToDownloads(context: android.content.Context, item: MediaItem): Boolean 
     context.contentResolver.update(target, values, null, null)
     true
 } catch (_: Exception) { false }
+
+
+fun expectedWhatsAppMediaUri(): Uri = DocumentsContract.buildDocumentUri(
+    "com.android.externalstorage.documents",
+    "primary:Android/media/com.whatsapp/WhatsApp/Media"
+)
+
+fun isUsefulWhatsAppFile(name: String): Boolean {
+    val n = name.lowercase()
+    if (n == ".nomedia" || n.startsWith(".")) return false
+    if (n.endsWith(".tmp") || n.endsWith(".partial") || n.endsWith(".download")) return false
+    return true
+}
+
+fun mimeFromName(name: String): String {
+    val ext = name.substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        "mp4" -> "video/mp4"
+        "3gp" -> "video/3gpp"
+        "opus" -> "audio/ogg"
+        "ogg" -> "audio/ogg"
+        "mp3" -> "audio/mpeg"
+        "m4a" -> "audio/mp4"
+        "pdf" -> "application/pdf"
+        "doc" -> "application/msword"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xls" -> "application/vnd.ms-excel"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "ppt" -> "application/vnd.ms-powerpoint"
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "txt" -> "text/plain"
+        else -> "application/octet-stream"
+    }
+}
