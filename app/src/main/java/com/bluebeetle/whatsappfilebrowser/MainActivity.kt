@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -73,7 +74,7 @@ fun BrowserApp() {
             section = Section.WHATSAPP
         }
     }
-    val downloadsBrowser = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val downloadsBrowser = rememberLauncherForActivityResult(DownloadsDocumentContract()) { uri ->
         if (uri != null) {
             val name = DocumentFile.fromSingleUri(context, uri)?.name ?: "Selected file"
             val item = MediaItem(uri, name, context.contentResolver.getType(uri) ?: mimeFromName(name), 0, System.currentTimeMillis())
@@ -104,7 +105,7 @@ fun BrowserApp() {
         Spacer(Modifier.height(10.dp))
         when {
             section == Section.DOWNLOADS ->
-                Button({ downloadsBrowser.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth()) { Text("Open Downloads") }
+                Button({ downloadsBrowser.launch(Unit) }, Modifier.fillMaxWidth()) { Text("Open Downloads") }
             section == Section.WHATSAPP && whatsappUri == null ->
                 Button({ whatsappPicker.launch(expectedWhatsAppMediaUri()) }, Modifier.fillMaxWidth()) { Text("Allow WhatsApp Media Access") }
             section == Section.OTHERS && otherUri == null ->
@@ -149,6 +150,24 @@ fun FileRow(item: MediaItem) {
             }
         }
     }
+}
+
+class DownloadsDocumentContract : ActivityResultContract<Unit, Uri?>() {
+    override fun createIntent(context: android.content.Context, input: Unit): Intent =
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(
+                DocumentsContract.EXTRA_INITIAL_URI,
+                DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents",
+                    "primary:Download"
+                )
+            )
+        }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+        if (resultCode == Activity.RESULT_OK) intent?.data else null
 }
 
 fun persistTree(context: android.content.Context, uri: Uri) {
