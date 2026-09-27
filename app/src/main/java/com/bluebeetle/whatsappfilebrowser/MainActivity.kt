@@ -6,6 +6,10 @@ import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.widget.Toast
@@ -52,6 +56,7 @@ fun BrowserApp() {
     var section by remember { mutableStateOf(Section.DOWNLOADS) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var mediaPermissionTick by remember { mutableIntStateOf(0) }
 
     fun refresh() {
         loading = true
@@ -65,6 +70,9 @@ fun BrowserApp() {
         }.start()
     }
 
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        mediaPermissionTick++
+    }
     val whatsappPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             persistTree(context, uri)
@@ -82,7 +90,15 @@ fun BrowserApp() {
         }
     }
 
-    LaunchedEffect(section, whatsappUri, otherUri) { refresh() }
+    LaunchedEffect(section, whatsappUri, otherUri, mediaPermissionTick) { refresh() }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            val permissions = arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
+            if (permissions.any { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }) {
+                mediaPermissionLauncher.launch(permissions)
+            }
+        }
+    }
 
     val visible = items.filter { it.name.contains(query, true) }.sortedByDescending { it.added }
 
