@@ -1,0 +1,38 @@
+name: Generate asimFiles Signing Key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate permanent signing keystore
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$KS_PASS" && test -n "$KEY_PASS" && test -n "$KEY_ALIAS"
+          keytool -genkeypair -v -keystore asimfiles-release.jks -storepass "$KS_PASS" -alias "$KEY_ALIAS" -keypass "$KEY_PASS" -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=asimFiles, OU=Personal, O=asimFiles, L=Toronto, ST=Ontario, C=CA"
+
+      - name: Create Base64 copy
+        run: base64 -w 0 asimfiles-release.jks > ANDROID_KEYSTORE_BASE64.txt
+
+      - name: Upload signing package
+        uses: actions/upload-artifact@v4
+        with:
+          name: asimFiles-PERMANENT-SIGNING-KEY
+          path: |
+            asimfiles-release.jks
+            ANDROID_KEYSTORE_BASE64.txt
+          retention-days: 1
+          if-no-files-found: error
