@@ -33,7 +33,7 @@ import java.text.DateFormat
 import java.util.Date
 
 data class MediaItem(val uri: Uri, val name: String, val mime: String, val size: Long, val added: Long)
-enum class Section { DOWNLOADS, WHATSAPP, OTHERS }
+enum class Section { WHATSAPP, DOWNLOADS, OTHERS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,7 +49,7 @@ fun BrowserApp() {
     var whatsappUri by remember { mutableStateOf(prefs.getString("root", null)?.let(Uri::parse)) }
     var otherUri by remember { mutableStateOf(prefs.getString("other_root", null)?.let(Uri::parse)) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
-    var section by remember { mutableStateOf(Section.DOWNLOADS) }
+    var section by remember { mutableStateOf(Section.WHATSAPP) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
 
@@ -73,6 +73,13 @@ fun BrowserApp() {
             section = Section.WHATSAPP
         }
     }
+    val downloadsBrowser = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = DocumentFile.fromSingleUri(context, uri)?.name ?: "Selected file"
+            val item = MediaItem(uri, name, context.contentResolver.getType(uri) ?: mimeFromName(name), 0, System.currentTimeMillis())
+            openFile(context, item)
+        }
+    }
     val otherPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             persistTree(context, uri)
@@ -90,12 +97,14 @@ fun BrowserApp() {
         Text("asimFiles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionButton("Downloads", Section.DOWNLOADS, section, Modifier.weight(1f)) { section = it }
             SectionButton("WhatsApp", Section.WHATSAPP, section, Modifier.weight(1f)) { section = it }
+            SectionButton("Downloads", Section.DOWNLOADS, section, Modifier.weight(1f)) { section = it }
             SectionButton("Others", Section.OTHERS, section, Modifier.weight(1f)) { section = it }
         }
         Spacer(Modifier.height(10.dp))
         when {
+            section == Section.DOWNLOADS ->
+                Button({ downloadsBrowser.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth()) { Text("Open Downloads") }
             section == Section.WHATSAPP && whatsappUri == null ->
                 Button({ whatsappPicker.launch(expectedWhatsAppMediaUri()) }, Modifier.fillMaxWidth()) { Text("Allow WhatsApp Media Access") }
             section == Section.OTHERS && otherUri == null ->
