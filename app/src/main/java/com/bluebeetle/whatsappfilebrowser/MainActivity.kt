@@ -195,16 +195,29 @@ fun scanDownloads(context: android.content.Context): List<MediaItem> {
 fun scanFolder(context: android.content.Context, rootUri: Uri): List<MediaItem> {
     val root = DocumentFile.fromTreeUri(context, rootUri) ?: return emptyList()
     val result = mutableListOf<MediaItem>()
-    fun walk(dir: DocumentFile) {
+    val cutoff = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+    val mediaFolders = setOf(
+        "WhatsApp Images", "WhatsApp Video", "WhatsApp Documents",
+        "WhatsApp Audio", "WhatsApp Voice Notes", "WhatsApp Animated Gifs"
+    )
+    val roots = root.listFiles().filter { it.isDirectory && it.name in mediaFolders }
+        .ifEmpty { listOf(root) }
+    fun walk(dir: DocumentFile, depth: Int = 0) {
+        if (depth > 2) return
         dir.listFiles().forEach { f ->
-            if (f.isDirectory) walk(f) else {
-                val n = f.name ?: "Unnamed file"
-                if (isUsefulFile(n)) result += MediaItem(f.uri, n, f.type ?: context.contentResolver.getType(f.uri) ?: mimeFromName(n), f.length(), f.lastModified())
+            if (f.isDirectory) {
+                if (!f.name.equals("Sent", true) && !f.name.equals("Private", true)) walk(f, depth + 1)
+            } else {
+                val n = f.name ?: return@forEach
+                val modified = f.lastModified()
+                if (isUsefulFile(n) && (modified == 0L || modified >= cutoff)) {
+                    result += MediaItem(f.uri, n, f.type ?: context.contentResolver.getType(f.uri) ?: mimeFromName(n), f.length(), modified)
+                }
             }
         }
     }
-    walk(root)
-    return result
+    roots.forEach { walk(it) }
+    return result.sortedByDescending { it.added }.take(500)
 }
 
 fun openFile(context: android.content.Context, item: MediaItem) {
