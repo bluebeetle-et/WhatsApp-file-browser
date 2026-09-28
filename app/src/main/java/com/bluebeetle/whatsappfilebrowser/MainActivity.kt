@@ -49,20 +49,45 @@ fun BrowserApp() {
     val prefs = remember { context.getSharedPreferences("storage", Activity.MODE_PRIVATE) }
     var whatsappUri by remember { mutableStateOf(prefs.getString("root", null)?.let(Uri::parse)) }
     var otherUri by remember { mutableStateOf(prefs.getString("other_root", null)?.let(Uri::parse)) }
+    var whatsappCache by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var otherCache by remember { mutableStateOf<List<MediaItem>?>(null) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
     var section by remember { mutableStateOf(Section.WHATSAPP) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
 
-    fun refresh() {
+    fun refresh(force: Boolean = false) {
+        val cached = when (section) {
+            Section.WHATSAPP -> whatsappCache
+            Section.OTHERS -> otherCache
+            Section.DOWNLOADS -> emptyList()
+        }
+        if (!force && cached != null) {
+            items = cached
+            loading = false
+            return
+        }
+        if (section == Section.DOWNLOADS) {
+            items = emptyList()
+            loading = false
+            return
+        }
         loading = true
         Thread {
             val found = when (section) {
                 Section.WHATSAPP -> whatsappUri?.let { scanFolder(context, it) } ?: emptyList()
-                Section.DOWNLOADS -> scanDownloads(context)
                 Section.OTHERS -> otherUri?.let { scanFolder(context, it) } ?: emptyList()
+                Section.DOWNLOADS -> emptyList()
             }
-            (context as Activity).runOnUiThread { items = found; loading = false }
+            (context as Activity).runOnUiThread {
+                items = found
+                when (section) {
+                    Section.WHATSAPP -> whatsappCache = found
+                    Section.OTHERS -> otherCache = found
+                    else -> Unit
+                }
+                loading = false
+            }
         }.start()
     }
 
@@ -71,6 +96,7 @@ fun BrowserApp() {
             persistTree(context, uri)
             prefs.edit().putString("root", uri.toString()).apply()
             whatsappUri = uri
+            whatsappCache = null
             section = Section.WHATSAPP
         }
     }
@@ -86,6 +112,7 @@ fun BrowserApp() {
             persistTree(context, uri)
             prefs.edit().putString("other_root", uri.toString()).apply()
             otherUri = uri
+            otherCache = null
             section = Section.OTHERS
         }
     }
@@ -111,9 +138,15 @@ fun BrowserApp() {
             section == Section.OTHERS && otherUri == null ->
                 Button({ otherPicker.launch(null) }, Modifier.fillMaxWidth()) { Text("Choose another folder") }
             section == Section.WHATSAPP ->
-                TextButton({ whatsappPicker.launch(whatsappUri) }) { Text("Change WhatsApp folder") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton({ whatsappPicker.launch(whatsappUri) }) { Text("Change WhatsApp folder") }
+                    TextButton({ whatsappCache = null; refresh(true) }) { Text("Refresh") }
+                }
             section == Section.OTHERS ->
-                TextButton({ otherPicker.launch(otherUri) }) { Text("Change folder") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton({ otherPicker.launch(otherUri) }) { Text("Change folder") }
+                    TextButton({ otherCache = null; refresh(true) }) { Text("Refresh") }
+                }
         }
         OutlinedTextField(query, { query = it }, label = { Text("Search files") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
